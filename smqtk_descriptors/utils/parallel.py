@@ -1,26 +1,27 @@
 import abc
-from collections.abc import Iterator as abc_Iterator
-from itertools import zip_longest
+from collections import Iterator as abc_Iterator
+from itertools import izip_longest as zip_longest
+from itertools import izip as zip
 import heapq
 import logging
 import multiprocessing
 import multiprocessing.queues
 import multiprocessing.synchronize
-import queue
+import Queue as queue
 import sys
 import threading
 import traceback
-from typing import Any, Callable, Iterable, List, Optional, Sequence, Type, Union
+# from typing import Any, Callable, Iterable, List, Optional, Sequence, Type, Union
 
 
 LOG = logging.getLogger(__name__)
 
 
 def parallel_map(
-    work_func: Callable,
-    *sequences: Iterable,
-    **kwargs: Any
-) -> "ParallelResultsIterator":
+    work_func,  # :Callable,
+    *sequences,  # :Iterable,
+    **kwargs  # :Any
+):  # -> "ParallelResultsIterator":
     """
     Generalized local parallelization helper for executing embarrassingly
     parallel functions on an iterable of input data. This function then yields
@@ -176,7 +177,7 @@ def parallel_map(
     [1, 1, 2, 6, 24, 120, 720, 5040, 40320, 362880]
     """
     # kwargs
-    cores: Optional[int] = kwargs.get('cores', None)
+    cores = kwargs.get('cores', None)  # : Optional[int]
     ordered = kwargs.get('ordered', True)
     buffer_factor = kwargs.get('buffer_factor', 2.0)
     use_multiprocessing = kwargs.get('use_multiprocessing', False)
@@ -201,8 +202,8 @@ def parallel_map(
         log.debug("Only using %d cores", cores)
 
     # Choose parallel types
-    queue_t: Union[Type[multiprocessing.Queue], Type[queue.Queue]]
-    worker_t: Type[Union[_WorkerThread, _WorkerProcess]]
+    # queue_t: Union[Type[multiprocessing.Queue], Type[queue.Queue]]
+    # worker_t: Type[Union[_WorkerThread, _WorkerProcess]]
     if use_multiprocessing:
         queue_t = multiprocessing.Queue
         worker_t = _WorkerProcess
@@ -237,7 +238,7 @@ class _TerminalPacket (object):
     """
 
 
-def is_terminal(p: Any) -> bool:
+def is_terminal(p):  # Any) -> bool:
     """
     Check if a given packet is a terminal element.
 
@@ -252,15 +253,15 @@ class ParallelResultsIterator (abc_Iterator):
 
     def __init__(
         self,
-        name: Optional[str],
-        ordered: bool,
-        is_multiprocessing: bool,
-        heart_beat: float,
-        work_queue: Union[queue.Queue, multiprocessing.Queue],
-        results_queue: Union[queue.Queue, multiprocessing.Queue],
-        feeder_thread: "_FeedQueueThread",
-        workers: Sequence[Union["_WorkerThread", "_WorkerProcess"]],
-        daemon: bool
+        name,  # :Optional[str],
+        ordered,  # :bool,
+        is_multiprocessing,  # :bool,
+        heart_beat,  # :float,
+        work_queue,  # :Union[queue.Queue, multiprocessing.Queue],
+        results_queue,  # :Union[queue.Queue, multiprocessing.Queue],
+        feeder_thread,  # :"_FeedQueueThread",
+        workers,  # :Sequence[Union["_WorkerThread", "_WorkerProcess"]],
+        daemon,  # :bool
     ):
         """
         :param name: String name to attribute to this iterator. May be None.
@@ -291,12 +292,14 @@ class ParallelResultsIterator (abc_Iterator):
             daemons.
         """
         self.name = name
-        self._l_prefix: str = f"[PRI{(name and f'::{name}') or ''}]"
+        # self._l_prefix: str = f"[PRI{(name and f'::{name}') or ''}]"
+        self._l_prefix = "[PRI{name}]".format(name=(name and "::{}".format(name)) or "")
 
         self.ordered = ordered
         if self.ordered:
-            LOG.debug(f"{self._l_prefix} Maintaining result iteration order "
-                      f"based on input order")
+            # LOG.debug(f"{self._l_prefix} Maintaining result iteration order "
+            LOG.debug("{} Maintaining result iteration order "
+                      "based on input order".format(self._l_prefix))
         self.heart_beat = heart_beat
         self.is_multiprocessing = is_multiprocessing
 
@@ -310,13 +313,13 @@ class ParallelResultsIterator (abc_Iterator):
         self.has_cleaned_up = False
 
         self.found_terminals = 0
-        self.result_heap: List = []
+        self.result_heap = []  # : List = []
         self.next_index = 0
 
         self.stop_event = threading.Event()
         self.stop_event_lock = threading.Lock()
 
-    def __repr__(self) -> str:
+    def __repr__(self):  # -> str:
         sfx = ''
         if self.name:
             sfx = '[' + self.name + ']'
@@ -327,7 +330,7 @@ class ParallelResultsIterator (abc_Iterator):
             "address": hex(id(self)),
         }
 
-    def __next__(self) -> Any:
+    def __next__(self):  # -> Any:
         l_prefix = self._l_prefix
         try:
             if not self.has_started_workers:
@@ -338,12 +341,12 @@ class ParallelResultsIterator (abc_Iterator):
                 packet = self.results_q_get()
 
                 if is_terminal(packet):
-                    LOG.log(1, f'{l_prefix} Found terminal')
+                    LOG.log(1, '{} Found terminal'.format(l_prefix))
                     self.found_terminals += 1
                 elif isinstance(packet[0], BaseException):
                     ex, formatted_exc = packet
-                    LOG.warning(f'{l_prefix} Received exception: '
-                                f'{ex}\n{formatted_exc}')
+                    LOG.warning('{} Received exception: {}\n{}'
+                                .format(l_prefix, str(ex), formatted_exc))
                     raise ex
                 else:
                     i, result = packet
@@ -363,8 +366,10 @@ class ParallelResultsIterator (abc_Iterator):
 
             # Nothing left
             if not self.stopped():
-                LOG.log(1, f"{l_prefix} Asserting empty queues on what looks "
-                           f"like a full iteration.")
+                # LOG.log(1, f"{l_prefix} Asserting empty queues on what looks "
+                #            f"like a full iteration.")
+                LOG.log(1, "{} Asserting empty queues on what looks "
+                           "like a full iteration.".format(l_prefix))
                 self.assert_queues_empty()
 
             raise StopIteration()
@@ -375,46 +380,46 @@ class ParallelResultsIterator (abc_Iterator):
         # - This also catches the in-due-course StopIteration exception, thus
         #   this is also the "normal" stop route.
         except BaseException as ex:
-            LOG.log(1, f"{l_prefix} Stopping iteration due to exception: "
-                       f"({type(ex)}) {str(ex)}")
+            LOG.log(1, "{} Stopping iteration due to exception: ({}) {}"
+                       .format(l_prefix, type(ex), str(ex)))
             self.stop()
             raise
 
     next = __next__
 
-    def start_workers(self) -> None:
+    def start_workers(self):  # -> None:
         """
         Start worker threads/processes.
         """
-        LOG.log(1, f"{self._l_prefix} Starting worker processes")
+        LOG.log(1, "{} Starting worker processes".format(self._l_prefix))
         for w in self.workers:
             w.daemon = self.daemon
             w.start()
 
-        LOG.log(1, f"{self._l_prefix} Starting feeder thread")
+        LOG.log(1, "{} Starting feeder thread".format(self._l_prefix))
         self.feeder_thread.daemon = self.daemon
         self.feeder_thread.start()
 
         self.has_started_workers = True
 
-    def clean_up(self) -> None:
+    def clean_up(self):  # -> None:
         """
         Clean up any live resources if we haven't done so already.
         """
         if self.has_started_workers and not self.has_cleaned_up:
             l_prefix = self._l_prefix
 
-            LOG.log(1, f"{l_prefix} Stopping feeder thread")
+            LOG.log(1, "{} Stopping feeder thread".format(l_prefix))
             self.feeder_thread.stop()
             self.feeder_thread.join()
 
-            LOG.log(1, f"{l_prefix} Stopping workers")
+            LOG.log(1, "{} Stopping workers".format(l_prefix))
             for w in self.workers:
                 w.stop()
                 w.join()
 
             if self.is_multiprocessing:
-                LOG.log(1, f"{l_prefix} Closing/Joining process queues")
+                LOG.log(1, "{} Closing/Joining process queues".format(l_prefix))
                 for q in (self.work_queue, self.results_queue):
                     assert isinstance(q, multiprocessing.queues.Queue)
                     q.close()
@@ -422,7 +427,7 @@ class ParallelResultsIterator (abc_Iterator):
 
             self.has_cleaned_up = True
 
-    def stop(self) -> None:
+    def stop(self):  # -> None:
         """
         Stop this iterator.
 
@@ -432,13 +437,13 @@ class ParallelResultsIterator (abc_Iterator):
             self.stop_event.set()
             self.clean_up()
 
-    def stopped(self) -> bool:
+    def stopped(self):  # -> bool:
         """
         :return: if this iterator has been stopped
         """
         return self.stop_event.is_set()
 
-    def results_q_get(self) -> Any:
+    def results_q_get(self):  # -> Any:
         """
         Attempts to get something from the results queue.
 
@@ -452,7 +457,7 @@ class ParallelResultsIterator (abc_Iterator):
                 pass
         raise StopIteration()
 
-    def assert_queues_empty(self) -> None:
+    def assert_queues_empty(self):  # -> None:
         # All work should be exhausted at this point
         if self.is_multiprocessing and sys.platform == 'darwin':
             # multiprocessing.Queue.qsize doesn't work on OSX
@@ -486,13 +491,13 @@ class _FeedQueueThread (threading.Thread):
 
     def __init__(
         self,
-        name: Optional[str],
-        arg_sequences: Sequence[Iterable],
-        q: Union[queue.Queue, multiprocessing.Queue],
-        num_terminal_packets: int,
-        heart_beat: float,
-        do_fill: bool,
-        fill_value: Any
+        name,  # :Optional[str],
+        arg_sequences,  # :Sequence[Iterable],
+        q,  # :Union[queue.Queue, multiprocessing.Queue],
+        num_terminal_packets,  # :int,
+        heart_beat,  # :float,
+        do_fill,  # :bool,
+        fill_value,  # :Any
     ):
         """
         :param name: Optional name for this feed queue thread.
@@ -513,8 +518,9 @@ class _FeedQueueThread (threading.Thread):
             input sequences along the same rules for `itertools.zip_longest`.
         :param fill_value: The value to fill with if `do_fill` is True.
         """
-        super().__init__(name=name)
-        self._l_prefix: str = f"[FQT{(name and f'::{name}') or ''}]"
+        super(_FeedQueueThread, self).__init__(name=name)
+        # self._l_prefix: str = f"[FQT{(name and f'::{name}') or ''}]"
+        self._l_prefix = "[FQT{}]".format((name and "::{}".format(name)) or "")
 
         self.arg_sequences = arg_sequences
         self.q = q
@@ -525,15 +531,15 @@ class _FeedQueueThread (threading.Thread):
 
         self._stop_event = threading.Event()
 
-    def stop(self) -> None:
+    def stop(self):  # -> None:
         self._stop_event.set()
 
-    def stopped(self) -> bool:
+    def stopped(self):  # -> bool:
         return self._stop_event.is_set()
 
-    def run(self) -> None:
+    def run(self):  # -> None:
         l_prefix = self._l_prefix
-        LOG.log(1, f"{l_prefix} Starting")
+        LOG.log(1, "{} Starting".format(l_prefix))
 
         if self.do_fill:
             _zip = zip_longest
@@ -553,27 +559,27 @@ class _FeedQueueThread (threading.Thread):
 
                 # If we're told to stop, immediately quit out of processing
                 if self.stopped():
-                    LOG.log(1, f"{l_prefix} Told to stop prematurely")
+                    LOG.log(1, "{} Told to stop prematurely".format(l_prefix))
                     break
         # Transport back any exceptions raised
         except (Exception, KeyboardInterrupt) as ex:
-            LOG.warning(f"{l_prefix} Caught exception {str(ex)}")
+            LOG.warning("{} Caught exception {}".format(l_prefix, str(ex)))
             self.q_put((ex, traceback.format_exc()))
             self.stop()
         else:
-            LOG.log(1, f"{l_prefix} Sending in-queue terminal packets")
+            LOG.log(1, "{} Sending in-queue terminal packets".format(l_prefix))
             for _ in range(self.num_terminal_packets):
                 self.q_put(_TerminalPacket())
         finally:
             # Explicitly stop any nested parallel maps
             for s in self.arg_sequences:
                 if isinstance(s, ParallelResultsIterator):
-                    LOG.log(1, f"{l_prefix} Stopping nested parallel map: {s}")
+                    LOG.log(1, "{} Stopping nested parallel map: {}".format(l_prefix, s))
                     s.stop()
 
-            LOG.log(1, f"{l_prefix} Closing")
+            LOG.log(1, "{} Closing".format(l_prefix))
 
-    def q_put(self, val: Any) -> None:
+    def q_put(self, val):  # Any):  # -> None:
         """
         Try to put the given value into the output queue until it is inserted
         (if it was previously full), or the stop signal was given.
@@ -589,16 +595,17 @@ class _FeedQueueThread (threading.Thread):
                 pass
 
 
-class _Worker(metaclass=abc.ABCMeta):
+class _Worker(object):
+    __metaclass__ = abc.ABCMeta
 
     def __init__(
         self,
-        name: Optional[str],
-        i: int,
-        work_function: Callable,
-        in_q: Union[queue.Queue, multiprocessing.Queue],
-        out_q: Union[queue.Queue, multiprocessing.Queue],
-        heart_beat: float
+        name,  # :Optional[str],
+        i,  # :int,
+        work_function,  # :Callable,
+        in_q,  # :Union[queue.Queue, multiprocessing.Queue],
+        out_q,  # :Union[queue.Queue, multiprocessing.Queue],
+        heart_beat,  # :float
     ):
         """
         Individual worker agent.
@@ -617,33 +624,39 @@ class _Worker(metaclass=abc.ABCMeta):
             important in allowing an external signal to indicate we should stop
             working (prevents hanging on queue interactions).
         """
-        self._l_prefix: str = f"[Worker{(name and f'::{name}') or ''}::#{int(i)}]"
+        # self._l_prefix: str = f"[Worker{(name and f'::{name}') or ''}::#{int(i)}]"
+        self._l_prefix = "[Worker{}::#{}]".format(
+            (name and '::{}'.format(name)) or '',
+            int(i)
+        )
 
         self.i = i
         self.work_function = work_function
         self.in_q = in_q
         self.out_q = out_q
         self.heart_beat = heart_beat
-        LOG.log(1, f"{self._l_prefix} Making process worker ({str(in_q)}, {str(out_q)})")
+        LOG.log(1, "{} Making process worker ({}, {})".format(
+            self._l_prefix, str(in_q), str(out_q)
+        ))
 
         self._stop_event = self._make_event()
 
     @classmethod
     @abc.abstractmethod
-    def _make_event(cls) -> Union[threading.Event, multiprocessing.synchronize.Event]:
+    def _make_event(cls):  # -> Union[threading.Event, multiprocessing.synchronize.Event]:
         """
         Generate an event type instance appropriate for the type of worker
         sub-classed.
         """
         raise NotImplementedError()
 
-    def stop(self) -> None:
+    def stop(self):  # -> None:
         self._stop_event.set()
 
-    def stopped(self) -> bool:
+    def stopped(self):  # -> bool:
         return self._stop_event.is_set()
 
-    def run(self) -> None:
+    def run(self):  # -> None:
         """
         Perform work function on available data in the input queue.
         """
@@ -652,7 +665,7 @@ class _Worker(metaclass=abc.ABCMeta):
             packet = self.q_get()
             while not self.stopped():
                 if is_terminal(packet):
-                    LOG.log(1, f"{l_prefix} sending terminal")
+                    LOG.log(1, "{} sending terminal".format(l_prefix))
                     self.q_put(packet)
                     self.stop()
                 elif isinstance(packet[0], Exception):
@@ -666,19 +679,19 @@ class _Worker(metaclass=abc.ABCMeta):
                     packet = self.q_get()
         # Transport back any exceptions raised
         except (Exception, KeyboardInterrupt) as ex:
-            LOG.warning(f"{l_prefix} Caught exception {type(ex)}")
+            LOG.warning("{} Caught exception {}".format(l_prefix, type(ex)))
             self.q_put((ex, traceback.format_exc()))
             self.stop()
         except BaseException as ex:
             # Some exotic error occurred (can only be systemExit at this
             # point?). Register stopping and re-raise.
-            LOG.log(1, f"Exotic error {type(ex)}: {ex}")
+            LOG.log(1, "Exotic error {}: {}".format(type(ex), str(ex)))
             self.stop()
             raise
         finally:
-            LOG.log(1, f"{l_prefix} Closing")
+            LOG.log(1, "{} Closing".format(l_prefix))
 
-    def q_get(self) -> Any:
+    def q_get(self):  # -> Any:
         """
         Try to get a value from the queue while keeping an eye out for an exit
         request.
@@ -691,7 +704,7 @@ class _Worker(metaclass=abc.ABCMeta):
             except queue.Empty:
                 pass
 
-    def q_put(self, val: Any) -> None:
+    def q_put(self, val):  # Any):  # -> None:
         """
         Try to put the given value into the output queue while keeping an eye
         out for an exit request.
@@ -712,12 +725,12 @@ class _WorkerProcess (_Worker, multiprocessing.Process):
 
     def __init__(
         self,
-        name: Optional[str],
-        i: int,
-        work_function: Callable,
-        in_q: Union[queue.Queue, multiprocessing.Queue],
-        out_q: Union[queue.Queue, multiprocessing.Queue],
-        heart_beat: float
+        name,  # :Optional[str],
+        i,  # :int,
+        work_function,  # :Callable,
+        in_q,  # :Union[queue.Queue, multiprocessing.Queue],
+        out_q,  # :Union[queue.Queue, multiprocessing.Queue],
+        heart_beat,  # :float
     ):
         """
         Constructor override to include multiprocessing.Process constructor
@@ -728,7 +741,7 @@ class _WorkerProcess (_Worker, multiprocessing.Process):
         _Worker.__init__(self, name, i, work_function, in_q, out_q, heart_beat)
 
     @classmethod
-    def _make_event(cls) -> multiprocessing.synchronize.Event:
+    def _make_event(cls):  # -> multiprocessing.synchronize.Event:
         return multiprocessing.Event()
 
     # The inheritance order should be sufficient to ensure the `_Worker.run`
@@ -741,12 +754,12 @@ class _WorkerThread (_Worker, threading.Thread):
 
     def __init__(
         self,
-        name: Optional[str],
-        i: int,
-        work_function: Callable,
-        in_q: Union[queue.Queue, multiprocessing.Queue],
-        out_q: Union[queue.Queue, multiprocessing.Queue],
-        heart_beat: float
+        name,  # :Optional[str],
+        i,  # :int,
+        work_function,  # :Callable,
+        in_q,  # :Union[queue.Queue, multiprocessing.Queue],
+        out_q,  # :Union[queue.Queue, multiprocessing.Queue],
+        heart_beat,  # :float
     ):
         """
         Constructor override to include threading.Thread constructor super
@@ -757,7 +770,7 @@ class _WorkerThread (_Worker, threading.Thread):
         _Worker.__init__(self, name, i, work_function, in_q, out_q, heart_beat)
 
     @classmethod
-    def _make_event(cls) -> threading.Event:
+    def _make_event(cls):  # -> threading.Event:
         return threading.Event()
 
     # The inheritance order should be sufficient to ensure the `_Worker.run`
